@@ -1,260 +1,211 @@
 "use client";
 
-import * as React from "react";
-import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
-
+import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ChartDataPoint } from "@/hooks/use-chart-data";
-import { useIsMobile } from "@/hooks/use-mobile";
-
-// Chart configuration
-const chartConfig = {
-  visitors: {
-    label: "Visitors",
-  },
-  desktop: {
-    label: "Desktop",
-    color: "var(--primary)",
-  },
-  mobile: {
-    label: "Mobile",
-    color: "var(--primary)",
-  },
-} satisfies ChartConfig;
+import { format } from "date-fns";
+import React from "react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { Skeleton } from "./ui/skeleton";
 
 interface GraphChartProps {
+  data: ChartDataPoint[];
+  isLoading: boolean;
+  timeRange: string;
+  onTimeRangeChange: (range: string) => void;
   title: string;
   description?: string;
-  data?: ChartDataPoint[];
-  isLoading?: boolean;
-  timeRange: string;
-  onTimeRangeChange: (value: string) => void;
 }
 
 export function GraphChart({
-  title,
-  description,
   data,
   isLoading,
   timeRange,
   onTimeRangeChange,
+  title,
+  description,
 }: GraphChartProps) {
-  const isMobile = useIsMobile();
-
-  // Default description based on time range
-  const timeRangeDescription = React.useMemo(() => {
-    switch (timeRange) {
-      case "1h":
-        return "Last hour";
-      case "1d":
-        return "Last 24 hours";
-      case "7d":
-        return "Last 7 days";
-      case "30d":
-        return "Last 30 days";
-      case "90d":
-        return "Last 3 months";
-      default:
-        return "Last 3 months";
-    }
-  }, [timeRange]);
-
-  // Format date based on time range
+  // Memoize the date formatter function
   const formatDate = React.useCallback(
-    (value: string) => {
-      const date = new Date(value);
+    (date: string) => {
+      const dateObj = new Date(date);
       if (timeRange === "1h") {
-        return date.toLocaleTimeString("en-US", {
-          hour: "numeric",
-          minute: "numeric",
-        });
+        return format(dateObj, "HH:mm");
       }
-      return date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
+      return format(dateObj, "MMM dd");
     },
     [timeRange]
   );
 
-  // Memoize the tooltip formatter to prevent re-renders
+  // Memoize the tooltip label formatter
   const labelFormatter = React.useCallback(
-    (value: any) => {
-      return formatDate(value as string);
+    (label: string) => {
+      const date = new Date(label);
+      if (timeRange === "1h") {
+        return format(date, "HH:mm:ss");
+      }
+      return format(date, "MMM dd, yyyy");
     },
-    [formatDate]
+    [timeRange]
   );
 
-  // Memoize card title content
+  // Memoize the time range description
+  const timeRangeDescription = React.useMemo(() => {
+    switch (timeRange) {
+      case "3m":
+        return "Past 3 months";
+      case "30d":
+        return "Past 30 days";
+      case "7d":
+        return "Past 7 days";
+      case "1d":
+        return "Past day";
+      case "1h":
+        return "Past hour";
+      default:
+        return "Past 3 months";
+    }
+  }, [timeRange]);
+
+  // Memoize the card title content
   const cardTitleContent = React.useMemo(
     () => (
-      <>
-        <span className="hidden @[540px]/card:block">
-          {description || `Total for the ${timeRangeDescription}`}
-        </span>
-        <span className="@[540px]/card:hidden">{timeRangeDescription}</span>
-      </>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+        {description && <CardDescription>{description}</CardDescription>}
+        <CardDescription>{timeRangeDescription}</CardDescription>
+      </CardHeader>
     ),
-    [description, timeRangeDescription]
+    [title, description, timeRangeDescription]
+  );
+
+  // Memoize the time range controls
+  const timeRangeControls = React.useMemo(
+    () => (
+      <div className="space-x-2 mb-4">
+        <Button
+          variant={timeRange === "3m" ? "default" : "outline"}
+          onClick={() => onTimeRangeChange("3m")}
+        >
+          3 months
+        </Button>
+        <Button
+          variant={timeRange === "30d" ? "default" : "outline"}
+          onClick={() => onTimeRangeChange("30d")}
+        >
+          30 days
+        </Button>
+        <Button
+          variant={timeRange === "7d" ? "default" : "outline"}
+          onClick={() => onTimeRangeChange("7d")}
+        >
+          7 days
+        </Button>
+        <Button
+          variant={timeRange === "1d" ? "default" : "outline"}
+          onClick={() => onTimeRangeChange("1d")}
+        >
+          Past day
+        </Button>
+        <Button
+          variant={timeRange === "1h" ? "default" : "outline"}
+          onClick={() => onTimeRangeChange("1h")}
+        >
+          Past hour
+        </Button>
+      </div>
+    ),
+    [timeRange, onTimeRangeChange]
   );
 
   // Memoize the chart component
   const chartComponent = React.useMemo(() => {
     if (isLoading) {
-      return (
-        <div className="flex h-[250px] w-full items-center justify-center">
-          Loading...
-        </div>
-      );
+      return <Skeleton className="w-full h-[350px]" />;
     }
 
+    // Calculate min/max for Y-axis with padding
+    const balances = data.map((d) => d.balance);
+    const min = Math.min(...balances);
+    const max = Math.max(...balances);
+    const padding = (max - min) * 0.1 || 1000;
+    const domain = [
+      Math.floor((min - padding) / 1000) * 1000,
+      Math.ceil((max + padding) / 1000) * 1000,
+    ];
+
     return (
-      <ChartContainer
-        config={chartConfig}
-        className="aspect-auto h-[250px] w-full"
-      >
-        <AreaChart data={data}>
+      <ResponsiveContainer width="100%" height={350}>
+        <AreaChart
+          data={data}
+          margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+        >
           <defs>
-            <linearGradient id="fillDesktop" x1="0" y1="0" x2="0" y2="1">
-              <stop
-                offset="5%"
-                stopColor="var(--color-desktop)"
-                stopOpacity={1.0}
-              />
-              <stop
-                offset="95%"
-                stopColor="var(--color-desktop)"
-                stopOpacity={0.1}
-              />
-            </linearGradient>
-            <linearGradient id="fillMobile" x1="0" y1="0" x2="0" y2="1">
-              <stop
-                offset="5%"
-                stopColor="var(--color-mobile)"
-                stopOpacity={0.8}
-              />
-              <stop
-                offset="95%"
-                stopColor="var(--color-mobile)"
-                stopOpacity={0.1}
-              />
+            <linearGradient id="balance" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8} />
+              <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid vertical={false} />
           <XAxis
             dataKey="date"
-            tickLine={false}
-            axisLine={false}
-            tickMargin={8}
-            minTickGap={32}
             tickFormatter={formatDate}
+            tick={{ fill: "#888888" }}
           />
-          <ChartTooltip
-            cursor={false}
-            defaultIndex={isMobile ? -1 : 10}
-            content={
-              <ChartTooltipContent
-                labelFormatter={labelFormatter}
-                indicator="dot"
-              />
+          <YAxis
+            domain={domain}
+            tickFormatter={(value) =>
+              new Intl.NumberFormat("en-US", {
+                style: "currency",
+                currency: "USD",
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }).format(value)
+            }
+            tick={{ fill: "#888888" }}
+          />
+          <CartesianGrid strokeDasharray="3 3" />
+          <Tooltip
+            labelFormatter={labelFormatter}
+            formatter={(value: number) =>
+              new Intl.NumberFormat("en-US", {
+                style: "currency",
+                currency: "USD",
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }).format(value)
             }
           />
           <Area
-            dataKey="mobile"
-            type="natural"
-            fill="url(#fillMobile)"
-            stroke="var(--color-mobile)"
-            stackId="a"
-          />
-          <Area
-            dataKey="desktop"
-            type="natural"
-            fill="url(#fillDesktop)"
-            stroke="var(--color-desktop)"
-            stackId="a"
+            type="monotone"
+            dataKey="balance"
+            stroke="#8884d8"
+            fillOpacity={1}
+            fill="url(#balance)"
           />
         </AreaChart>
-      </ChartContainer>
+      </ResponsiveContainer>
     );
-  }, [data, isLoading, formatDate, labelFormatter, isMobile]);
-
-  // Memoize the time range controls
-  const timeRangeControls = React.useMemo(
-    () => (
-      <CardAction>
-        <ToggleGroup
-          type="single"
-          value={timeRange}
-          onValueChange={onTimeRangeChange}
-          variant="outline"
-          className="hidden *:data-[slot=toggle-group-item]:!px-4 @[767px]/card:flex"
-        >
-          <ToggleGroupItem value="90d">Last 3 months</ToggleGroupItem>
-          <ToggleGroupItem value="30d">Last 30 days</ToggleGroupItem>
-          <ToggleGroupItem value="7d">Last 7 days</ToggleGroupItem>
-          <ToggleGroupItem value="1d">Last 24 hours</ToggleGroupItem>
-          <ToggleGroupItem value="1h">Last hour</ToggleGroupItem>
-        </ToggleGroup>
-        <Select value={timeRange} onValueChange={onTimeRangeChange}>
-          <SelectTrigger
-            className="flex w-40 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate @[767px]/card:hidden"
-            size="sm"
-            aria-label="Select a time range"
-          >
-            <SelectValue placeholder="Last 3 months" />
-          </SelectTrigger>
-          <SelectContent className="rounded-xl">
-            <SelectItem value="90d" className="rounded-lg">
-              Last 3 months
-            </SelectItem>
-            <SelectItem value="30d" className="rounded-lg">
-              Last 30 days
-            </SelectItem>
-            <SelectItem value="7d" className="rounded-lg">
-              Last 7 days
-            </SelectItem>
-            <SelectItem value="1d" className="rounded-lg">
-              Last 24 hours
-            </SelectItem>
-            <SelectItem value="1h" className="rounded-lg">
-              Last hour
-            </SelectItem>
-          </SelectContent>
-        </Select>
-      </CardAction>
-    ),
-    [timeRange, onTimeRangeChange]
-  );
+  }, [data, isLoading, formatDate, labelFormatter]);
 
   return (
-    <Card className="@container/card">
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{cardTitleContent}</CardDescription>
+    <Card>
+      {cardTitleContent}
+      <CardContent>
         {timeRangeControls}
-      </CardHeader>
-      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
         {chartComponent}
       </CardContent>
     </Card>

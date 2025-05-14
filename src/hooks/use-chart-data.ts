@@ -3,22 +3,19 @@ import { useQuery } from "@tanstack/react-query";
 // Define the chart data type
 export interface ChartDataPoint {
   date: string;
-  desktop: number;
-  mobile: number;
+  balance: number;
 }
 
-// Function to fetch data from an endpoint
+// Function to fetch data from the endpoint
 async function fetchChartData(timeRange: string): Promise<ChartDataPoint[]> {
-  // Example URL - replace with your actual API endpoint
-  const response = await fetch(
-    `https://api.example.com/metrics?timeRange=${timeRange}`
-  );
+  const response = await fetch(`/api/metrics?timeRange=${timeRange}`);
 
   if (!response.ok) {
     throw new Error("Failed to fetch chart data");
   }
 
-  return response.json();
+  const result = await response.json();
+  return result.data;
 }
 
 // Custom hook that uses React Query to fetch and cache the data
@@ -58,8 +55,7 @@ function getMockChartData(timeRange: string): ChartDataPoint[] {
 
       data.push({
         date: date.toISOString(),
-        desktop: Math.floor(Math.random() * 400) + 100,
-        mobile: Math.floor(Math.random() * 300) + 100,
+        balance: Math.floor(Math.random() * 100000) + 50000, // Random balance between 50k and 150k
       });
     }
     return data;
@@ -72,8 +68,7 @@ function getMockChartData(timeRange: string): ChartDataPoint[] {
 
     data.push({
       date: date.toISOString().split("T")[0],
-      desktop: Math.floor(Math.random() * 400) + 100,
-      mobile: Math.floor(Math.random() * 300) + 100,
+      balance: Math.floor(Math.random() * 100000) + 50000, // Random balance between 50k and 150k
     });
   }
 
